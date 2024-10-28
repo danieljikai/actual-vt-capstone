@@ -1,6 +1,3 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
 name: Build and deploy Node.js app to Azure Web App - fin-der
 
 on:
@@ -10,8 +7,64 @@ on:
   workflow_dispatch:
 
 jobs:
+  # API Job
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up environment
+        uses: ./.github/actions/setup
+      - name: Build API
+        run: cd packages/api && yarn build
+      - name: Create package tgz
+        run: cd packages/api && yarn pack && mv package.tgz actual-api.tgz
+      - name: Upload Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: actual-api
+          path: packages/api/actual-api.tgz
+
+  # CRDT Job
+  crdt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up environment
+        uses: ./.github/actions/setup
+      - name: Build CRDT
+        run: cd packages/crdt && yarn build
+      - name: Create package tgz
+        run: cd packages/crdt && yarn pack && mv package.tgz actual-crdt.tgz
+      - name: Upload Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: actual-crdt
+          path: packages/crdt/actual-crdt.tgz
+
+  # Web Job
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up environment
+        uses: ./.github/actions/setup
+      - name: Build Web
+        run: ./bin/package-browser
+      - name: Upload Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: actual-web
+          path: packages/desktop-client/build
+      - name: Upload Build Stats
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-stats
+          path: packages/desktop-client/build-stats
+
+  # Main Build Job
   build:
     runs-on: ubuntu-latest
+    needs: [api, crdt, web]  # Ensure these jobs complete first
 
     steps:
       - name: Install node
@@ -19,10 +72,8 @@ jobs:
         with:
           node-version: 20.x
           
-
       - name: Yarn install
-        run: |
-          yarn install
+        run: yarn install
 
       - name: Zip artifact for deployment
         run: zip release.zip ./* -r
@@ -33,6 +84,7 @@ jobs:
           name: node-app
           path: release.zip
 
+  # Deployment Job
   deploy:
     runs-on: ubuntu-latest
     needs: build
@@ -65,4 +117,3 @@ jobs:
           app-name: 'fin-der'
           slot-name: 'Production'
           package: .
-          
